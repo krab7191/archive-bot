@@ -1,0 +1,22 @@
+{
+  "name": "archive-bot",
+  "version": "0.0.1",
+  "description": "An app for automatically re-posting messages approaching the 90 day limit, backing up channels to external sources.",
+  "main": "src/slack_app.js",
+  "scripts": {
+    "preinstall": "pip3 install -r requirements.txt",
+    "postinstall": "chmod u+x *.sh",
+    "dev": "nodemon --watch './src/*.py' ./src/slack_app.py",
+    "docker:build": "./create_image.sh",
+    "docker:run": "docker run -p 8080:8080 archive-bot",
+    "test": "echo \"Error: no tests yet.\" && exit 1"
+  },
+  "keywords": [
+    "Slack"
+  ],
+  "author": "Karsten Rabe <karstenrabe91@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
