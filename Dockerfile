@@ -9,7 +9,7 @@ ENV ENV='production'
 ENV PORT=8080
 
 # Move necessary files
-COPY /src/slack_app.py /base/app/slack_app.py
+COPY /src/ /base/app
 COPY requirements.txt /base/requirements.txt
 
 # Install deps
@@ -17,4 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8080
 
-ENTRYPOINT ["python", "./app/slack_app.py"]
+ENTRYPOINT ["python", "./app/main.py"]
