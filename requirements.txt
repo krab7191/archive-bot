@@ -1,5 +1,6 @@
-asyncio==3.4.3
+aiocron==1.8.0
 aiohttp==3.8.5
+asyncio==3.4.3
 python-dotenv==1.0.0
 slack-bolt==1.18.0
 slack-sdk==3.21.3
