@@ -1,5 +1,6 @@
 # Dependency imports
 import asyncio
+import time
 from dotenv import load_dotenv
 from logging import getLogger, DEBUG, INFO, StreamHandler
 from operator import itemgetter
@@ -44,6 +45,82 @@ async def event_message(event, ack, say):
         logger.error(f"Error handling message: {e}")
         await say("An error occurred.")
 
+# Example event from app_mention
+# {
+#   "client_msg_id": "b9cd5c0b-0d2f-4b08-9faa-fa76c80408a6",
+#   "type": "app_mention",
+#   "text": "<@U05NV3E75S6> repost 90",
+#   "user": "U05MXQPREJD",
+#   "ts": "1693007756.663679",
+#   "blocks": [
+#     {
+#       "type": "rich_text",
+#       "block_id": "+FMW=",
+#       "elements": [
+#         {
+#           "type": "rich_text_section",
+#           "elements": [
+#             {
+#               "type": "user",
+#               "user_id": "U05NV3E75S6"
+#             },
+#             {
+#               "type": "text",
+#               "text": " repost 90"
+#             }
+#           ]
+#         }
+#       ]
+#     }
+#   ],
+#   "team": "T05MK5U6CFL",
+#   "channel": "C05NNEZV4P8",
+#   "event_ts": "1693007756.663679"
+# }
+
+
+@slack_app.event("app_mention")
+async def event_mention(ack, say, event, client):
+    try:
+        await ack()
+        raw_text = event.get("text", "<@U05NV3E75S6>").strip()
+        if raw_text == "<@U05NV3E75S6>":
+            # TODO: No commands, display help message
+            user = event.get("user")
+            await say(f"Hi <@{user}>, how can I help?")
+
+        # Strip <@U05NV3E75S6> which is bot's ID
+        text = raw_text.replace("<@U05NV3E75S6>", "").strip().lower()
+        logger.info(text)
+        if text == "repost":
+            await say("Reposting messages in this channel from 89 days ago:")
+        # Args
+        elif text.startswith("repost"):
+            args = text.replace("repost ", "")
+            await repost(client, event, args, say)
+        elif text.startswith("delete"):
+            args = text.replace("delete ", "")
+            chan_id = event.get("channel")
+            await say("Deleting my messages from the last hour! Sorry!")
+            time.sleep(2)
+            hist_resp = await get_channel_history(chan_id)
+            msgs = hist_resp.get("messages")
+            if msgs:
+                timestamps = []
+                for msg in msgs:
+                    user = msg.get("user", "")
+                    if user == "U05NV3E75S6":  # Select bot's own messages
+                        timestamps.append(msg["ts"])
+                now = time.time()
+                hour = 1000 * 60 * 60
+                for timestamp in timestamps:
+                    if float(timestamp) > now - hour:  # Delete older than 1 hour
+                        await del_msg(chan_id=chan_id, msg_ts=timestamp, client=client, say=say)  # noqa: E501
+
+    except Exception as e:
+        logger.error(e)
+        await say("An error occurred.")
+
 
 @slack_app.event("app_home_opened")
 async def event_home_opened(client, event):
@@ -64,6 +141,23 @@ async def event_home_opened(client, event):
             ]
         }
     )
+
+# Repost function
+async def repost(client, event, args, say):
+    # No args; repost all old msgsU05MXQPREJD
+    chan_id = event.get("channel")
+    logger.info("Re-posting old messages: ")
+    logger.info(f"args: {args}")
+    # await say(f"Reposting messages in this channel older than {args} days:")
+    msg_resp = await get_channel_history(id=chan_id)
+    err = msg_resp.get("err")
+    if not err:
+        msg_ids = []
+        msgs = msg_resp.get("messages")
+        logger.info(fmt_json(msgs))
+        for msg in msgs:
+            msg_ids.append(msg["id"])
+        logger.info(msg_ids)
 
 
 # Functions for Cron
@@ -86,7 +180,17 @@ async def get_channels():
     except SlackApiError as e:
         logger.error("Error fetching conversations: {}".format(e))
         return {"err": "{}".format(e), "channels": None}
-    
+
+# Delete messages... Useful for testing + debugging to not clutter space
+async def del_msg(chan_id, msg_ts, client, say):
+    try:
+        logger.info(f"Deleting message with TS: {msg_ts}")
+        await client.chat_delete(channel=chan_id, ts=msg_ts)
+
+    except Exception as e:
+        logger.error(e)
+
+
 async def get_channel_history(id: str):
     logger.info(id)
     client = slack_app.client
@@ -134,7 +238,5 @@ async def start_slack():
     await handler.start_async()
 
 # Run app in asyncio thread
-
-
 def init_slack():
     asyncio.run(start_slack())
