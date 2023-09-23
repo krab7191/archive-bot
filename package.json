@@ -4,8 +4,9 @@
   "description": "An app for automatically re-posting messages approaching the 90 day limit, backing up channels to external sources.",
   "main": "./src/main.py",
   "scripts": {
-    "preinstall": "pip3 install -r requirements.txt",
-    "postinstall": "chmod u+x *.sh",
+    "make-executable": "chmod u+x *.sh",
+    "venv": "./create_venv.sh",
+    "preinstall": "npm run make-executable && npm run venv && pip3 install --ignore-installed -r requirements.txt",
     "dev": "nodemon -e py --watch './src' --exec 'python ./src/main.py'",
     "docker:build": "./create_image.sh",
     "docker:run": "docker run -p 8080:8080 archive-bot",
