@@ -8,7 +8,10 @@
     "postinstall": "chmod u+x *.sh",
     "dev": "nodemon -e py --watch './src' --exec 'python ./src/main.py'",
     "docker:build": "./create_image.sh",
-    "docker:run": "docker run -p 8080:8080 archive-bot"
+    "docker:run": "docker run -p 8080:8080 archive-bot",
+    "test": "coverage run --branch --source=src --omit=test_*.py -m pytest && npm run coverage",
+    "coverage": "coverage report -m",
+    "postcoverage": "open-cli ./htmlcov/index.html"
   },
   "keywords": [
     "Slack"
@@ -16,6 +19,7 @@
   "author": "Karsten Rabe <karstenrabe91@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "open-cli": "^7.2.0"
   }
 }
