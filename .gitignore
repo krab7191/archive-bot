@@ -9,3 +9,6 @@ src/__pycache__
 htmlcov
 coverage.lcov
 *,cover
+
+# Python venv
+archive-bot
