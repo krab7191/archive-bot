@@ -3,3 +3,9 @@
 .env
 node_modules
 src/__pycache__
+
+# Code coverage
+.coverage
+htmlcov
+coverage.lcov
+*,cover
