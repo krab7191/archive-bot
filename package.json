@@ -6,7 +6,8 @@
   "scripts": {
     "make-executable": "chmod u+x *.sh",
     "venv": "./create_venv.sh",
-    "preinstall": "npm run make-executable && npm run venv && pip3 install --ignore-installed -r requirements.txt",
+    "py-deps": "python3 -m pip install --ignore-installed -r requirements.txt",
+    "preinstall": "npm run make-executable && npm run venv && npm run py-deps",
     "dev": "nodemon -e py --watch './src' --exec 'python ./src/main.py'",
     "docker:build": "./create_image.sh",
     "docker:run": "docker run -p 8080:8080 archive-bot",
