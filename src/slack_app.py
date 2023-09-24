@@ -30,8 +30,6 @@ logger.addHandler(StreamHandler())
 slack_app = AsyncApp(token=SLACK_BOT_TOKEN)
 
 # Subscribe to events
-
-
 @slack_app.event("message")
 async def event_message(event, ack, say):
     text = event.get('text', '')
