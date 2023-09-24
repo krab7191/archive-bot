@@ -10,9 +10,9 @@
     "dev": "nodemon -e py --watch './src' --exec 'python ./src/main.py'",
     "docker:build": "./create_image.sh",
     "docker:run": "docker run -p 8080:8080 archive-bot",
-    "test": "coverage run --branch --source=src --omit=test_*.py -m pytest && npm run coverage",
-    "coverage": "coverage report -m",
-    "postcoverage": "open-cli ./htmlcov/index.html"
+    "test": "coverage run --branch --source=src --omit=test_*.py -m pytest -s && npm run coverage",
+    "coverage": "coverage html",
+    "postcoverage": "open-cli --extension=html ./htmlcov/index.html -- browser"
   },
   "keywords": [
     "Slack"
