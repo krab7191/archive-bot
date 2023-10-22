@@ -11,6 +11,7 @@ from slack_sdk.errors import SlackApiError
 
 # Local module imports
 from utils import fmt_json
+from db.mongo import save_messages
 
 # ENV vars
 DEFAULT_ENV = {
@@ -30,14 +31,16 @@ logger.addHandler(StreamHandler())
 slack_app = AsyncApp(token=SLACK_BOT_TOKEN)
 
 # Subscribe to events
+
+
 @slack_app.event("message")
 async def event_message(event, ack, say):
-    text = event.get('text', '')
+    # text = event.get('text', '')
     try:
         await ack()
-        logger.info(f"Message received: {text or ''}")
-        if text:
-            await say(text)
+        # logger.info(f"Message received: {text or ''}")
+        # if text:
+        #     await say(text)
 
     except Exception as e:
         logger.error(f"Error handling message: {e}")
@@ -114,10 +117,40 @@ async def event_mention(ack, say, event, client):
                 for timestamp in timestamps:
                     if float(timestamp) > now - hour:  # Delete older than 1 hour
                         await del_msg(chan_id=chan_id, msg_ts=timestamp, client=client, say=say)  # noqa: E501
+        elif text == "backup channel":
+            chan_id = event.get("channel")
+            logger.info(f"Backing up messages for channel {chan_id}")
+            msg_res = await get_channel_history(chan_id)
+            msg_err = msg_res.get("err", None)
+            if msg_err:
+                logger.error(f"Error getting channel history: {msg_err}")
+            else:
+                msgs = msg_res.get("messages", None)
+                clean_messages = filter_messages(msgs)
+                logger.info("Calling save_messages...")
+                save_msgs_res = await save_messages(clean_messages, chan_id)
 
+                if save_msgs_res == 0:
+                    await say("Channel history already exists in database. 0 messages saved.")
+                elif not save_msgs_res:
+                    await say("There was an error backing up channel history. Please try again.")
+                else:
+                    await say("Messages backed up successfully.")
     except Exception as e:
         logger.error(e)
         await say("An error occurred.")
+
+
+def filter_messages(m):
+    logger.info("filter_messages")
+    messages = []
+    for message in m:
+        if not message.get("subtype", None) == "channel_join":
+            if not message.get("text", '').startswith("<@U05NV3E75S6>"):
+                if not message.get("bot_id", None):
+                    messages.append(message)
+
+    return messages
 
 
 @slack_app.event("app_home_opened")
@@ -141,6 +174,8 @@ async def event_home_opened(client, event):
     )
 
 # Repost function
+
+
 async def repost(client, event, args, say):
     # No args; repost all old msgsU05MXQPREJD
     chan_id = event.get("channel")
@@ -180,6 +215,8 @@ async def get_channels():
         return {"err": "{}".format(e), "channels": None}
 
 # Delete messages... Useful for testing + debugging to not clutter space
+
+
 async def del_msg(chan_id, msg_ts, client, say):
     try:
         logger.info(f"Deleting message with TS: {msg_ts}")
@@ -199,7 +236,7 @@ async def get_channel_history(id: str):
         if ok:
             messages = res["messages"]
             more = res["has_more"]
-            logger.info(f"More messages? {more}")
+            # logger.info(f"More messages? {more}")
             return {"err": None, "messages": messages}
         else:
             return {"err": res["error"], "messages": None}
@@ -236,5 +273,7 @@ async def start_slack():
     await handler.start_async()
 
 # Run app in asyncio thread
+
+
 def init_slack():
     asyncio.run(start_slack())
