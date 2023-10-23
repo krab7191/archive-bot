@@ -13,13 +13,15 @@ from slack_sdk.errors import SlackApiError
 from utils import fmt_json
 from db.mongo import save_messages
 
+# Barking owl bot name: <@U0622JFJ0ES>
+
 # ENV vars
 DEFAULT_ENV = {
     'ENV': 'development'
 }
 load_dotenv()
-ENV, SLACK_BOT_TOKEN, SOCKET_TOKEN = itemgetter(
-    'ENV', 'SLACK_BOT_TOKEN', 'SOCKET_TOKEN')({**DEFAULT_ENV, **dict(environ)})
+ENV, SLACK_BOT_TOKEN, SOCKET_TOKEN, DEV_BOT_TOKEN, DEV_SOCKET_TOKEN = itemgetter(
+    'ENV', 'SLACK_BOT_TOKEN', 'SOCKET_TOKEN', 'DEV_BOT_TOKEN', 'DEV_SOCKET_TOKEN')({**DEFAULT_ENV, **dict(environ)})
 
 # Initialize logger
 logger = getLogger("slack_app")
@@ -27,8 +29,10 @@ debug_level = DEBUG if ENV == 'development' else INFO
 logger.setLevel(debug_level)
 logger.addHandler(StreamHandler())
 
+token = DEV_BOT_TOKEN if ENV == 'production' else SLACK_BOT_TOKEN
+
 # Init slack app
-slack_app = AsyncApp(token=SLACK_BOT_TOKEN)
+slack_app = AsyncApp(token=token)
 
 # Subscribe to events
 
@@ -85,13 +89,17 @@ async def event_mention(ack, say, event, client):
     try:
         await ack()
         raw_text = event.get("text", "<@U05NV3E75S6>").strip()
-        if raw_text == "<@U05NV3E75S6>":
+        logger.info(raw_text)
+        if raw_text == "<@U05NV3E75S6>" or raw_text == "<@U0622JFJ0ES>":
             # TODO: No commands, display help message
             user = event.get("user")
             await say(f"Hi <@{user}>, how can I help?")
 
         # Strip <@U05NV3E75S6> which is bot's ID
-        text = raw_text.replace("<@U05NV3E75S6>", "").strip().lower()
+        text = raw_text.replace("<@U05NV3E75S6>", "")
+        text = raw_text.replace("<@U0622JFJ0ES>", "")
+        text = text.strip().lower()
+
         logger.info(text)
         if text == "repost":
             await say("Reposting messages in this channel from 89 days ago:")
@@ -110,7 +118,7 @@ async def event_mention(ack, say, event, client):
                 timestamps = []
                 for msg in msgs:
                     user = msg.get("user", "")
-                    if user == "U05NV3E75S6":  # Select bot's own messages
+                    if user == "U05NV3E75S6" or user == "U0622JFJ0ES":  # Select bot's own messages
                         timestamps.append(msg["ts"])
                 now = time.time()
                 hour = 1000 * 60 * 60
@@ -119,23 +127,28 @@ async def event_mention(ack, say, event, client):
                         await del_msg(chan_id=chan_id, msg_ts=timestamp, client=client, say=say)  # noqa: E501
         elif text == "backup channel":
             chan_id = event.get("channel")
-            logger.info(f"Backing up messages for channel {chan_id}")
-            msg_res = await get_channel_history(chan_id)
-            msg_err = msg_res.get("err", None)
-            if msg_err:
-                logger.error(f"Error getting channel history: {msg_err}")
+            chan_backup_res = await backup_channel(chan_id, say)
+            if chan_backup_res:
+                await say("Channel backed up successfully.")
             else:
-                msgs = msg_res.get("messages", None)
-                clean_messages = filter_messages(msgs)
-                logger.info("Calling save_messages...")
-                save_msgs_res = await save_messages(clean_messages, chan_id)
+                await say("Error backing up channel. Please try again.")
+        elif text == "full backup":
+            chans_backed_up = 0
+            await say("Starting full backup of messages in all channels that I'm in...")
+            channels_resp = await get_channels()
+            logger.info(fmt_json(channels_resp))
+            err = channels_resp.get("err", None)
+            if not err:
+                channels = channels_resp.get("channels")
+                await say(f"Found {len(channels)} channels, beginning backup...")
+                for channel in channels:
+                    backup_channel_res = await backup_channel(channel["id"], channel["name"], say)
+                    if backup_channel_res:
+                        chans_backed_up += 1
+                await say(f"Full backup complete. History from {chans_backed_up} channels backed up.")
+            else:
+                logger.error(f"Error getting channels in workspace: {err}")
 
-                if save_msgs_res == 0:
-                    await say("Channel history already exists in database. 0 messages saved.")
-                elif not save_msgs_res:
-                    await say("There was an error backing up channel history. Please try again.")
-                else:
-                    await say("Messages backed up successfully.")
     except Exception as e:
         logger.error(e)
         await say("An error occurred.")
@@ -146,12 +159,36 @@ def filter_messages(m):
     messages = []
     for message in m:
         if not message.get("subtype", None) == "channel_join":
-            if not message.get("text", '').startswith("<@U05NV3E75S6>"):
-                if not message.get("bot_id", None):
-                    messages.append(message)
+            if not message.get("subtype", None) == "channel_purpose":
+                if not message.get("text", '').startswith("<@U05NV3E75S6>"):
+                    if not message.get("text", '').startswith("<@U0622JFJ0ES>"):
+                        if not message.get("bot_id", None):
+                            messages.append(message)
 
     return messages
 
+
+async def backup_channel(chan_id, chan_name, say):
+    logger.info(f"Backing up messages for channel {chan_id}")
+    msg_res = await get_channel_history(chan_id)
+    msg_err = msg_res.get("err", None)
+    if msg_err:
+        logger.error(f"Error getting channel history: {msg_err}")
+    else:
+        msgs = msg_res.get("messages", None)
+        clean_messages = filter_messages(msgs)
+        logger.info("Calling save_messages...")
+        save_msgs_res = await save_messages(clean_messages, chan_id, chan_name)
+
+        if save_msgs_res == 0:
+            await say(f'Channel history for "{chan_name}" already exists in database. 0 messages saved.')
+            return True
+        elif not save_msgs_res:
+            await say("There was an error backing up channel history. Please try again.")
+            return False
+        else:
+            await say(f"Messages backed up successfully for channel: {chan_name}.")
+            return True
 
 @slack_app.event("app_home_opened")
 async def event_home_opened(client, event):
@@ -198,7 +235,7 @@ async def get_channels():
     client = slack_app.client
     try:
         # Docs: https://api.slack.com/methods/conversations.list
-        res = await client.conversations_list()
+        res = await client.conversations_list(types=["public_channel","private_channel"])
         ok = res["ok"]
         if ok:
             channels = res["channels"]
@@ -236,7 +273,7 @@ async def get_channel_history(id: str):
         if ok:
             messages = res["messages"]
             more = res["has_more"]
-            # logger.info(f"More messages? {more}")
+            logger.info(f"More messages? {more}")
             return {"err": None, "messages": messages}
         else:
             return {"err": res["error"], "messages": None}
@@ -269,7 +306,8 @@ async def start_slack():
     logger.info(
         f"Starting slack app in {'DEV' if ENV=='development' else 'PROD'} mode.")
 
-    handler = AsyncSocketModeHandler(slack_app, SOCKET_TOKEN)
+    socket_token = DEV_SOCKET_TOKEN if ENV == 'production' else SOCKET_TOKEN
+    handler = AsyncSocketModeHandler(slack_app, socket_token)
     await handler.start_async()
 
 # Run app in asyncio thread

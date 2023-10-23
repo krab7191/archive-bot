@@ -13,7 +13,7 @@ from utils import fmt_json
 load_dotenv()
 ENV = environ.get("ENV", 'development')
 MONGO_PASS = environ.get('MONGO_PASS', None)
-mongo_uri = f"mongodb+srv://archive-bot:{MONGO_PASS}@archive-bot.jbpejzs.mongodb.net/?retryWrites=true&w=majority" if ENV == 'production' else 'mongodb://localhost:27017/archive-bot'
+mongo_uri = f"mongodb+srv://archive-bot:{MONGO_PASS}@archive-bot.jbpejzs.mongodb.net/?retryWrites=true&w=majority" if ENV == 'development' else 'mongodb://localhost:27017/archive-bot'
 
 # Start logger
 logger = getLogger("mongo")
@@ -27,7 +27,7 @@ db = mongo_client["archive-bot"]
 logger.info('Mongo DB connection initialized.')
 
 
-async def save_messages(messages, chan_id):
+async def save_messages(messages, chan_id, chan_name):
     logger.info("save_messages...")
     msgs_inserted = 0
     try:
@@ -56,7 +56,7 @@ async def save_messages(messages, chan_id):
             logger.info("Setting channel id")
             get_channel_resp = db.Channel.find_one({"channel_id": chan_id})
             if not get_channel_resp:
-                channel_insert = db.Channel.insert_one({"channel_id": chan_id}).inserted_id
+                channel_insert = db.Channel.insert_one({"channel_id": chan_id, "channel_name": chan_name }).inserted_id
                 message["channel"] = channel_insert
             else:
                 message["channel"] = get_channel_resp["_id"]
